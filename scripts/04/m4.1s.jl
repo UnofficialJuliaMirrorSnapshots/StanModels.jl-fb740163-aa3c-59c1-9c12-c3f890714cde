@@ -1,16 +1,9 @@
-using StanModels
-gr(size=(500,500));
+using StanModels, CSV
 
-ProjDir = rel_path("..", "scripts", "04")
-cd(ProjDir)
+df = filter(row -> row[:age] >= 18, 
+  CSV.read(joinpath(@__DIR__, "..", "..", "data", "Howell1.csv"), delim=';'))
 
-howell1 = CSV.read(rel_path("..", "data", "Howell1.csv"), delim=';')
-df = convert(DataFrame, howell1);
-
-df2 = filter(row -> row[:age] >= 18, df)
-first(df2, 5)
-
-heightsmodel = "
+m4_1s = "
 // Inferring a Rate
 data {
   int N;
@@ -30,19 +23,13 @@ model {
 }
 ";
 
-stanmodel = Stanmodel(name="heights", monitors = ["mu", "sigma"],model=heightsmodel,
-  output_format=:mcmcchains);
+sm = SampleModel("m4.1s", m4_1s);
 
-heightsdata = Dict("N" => length(df2[:height]), "h" => df2[:height]);
+m4_1_data = Dict("N" => length(df[!, :height]), "h" => df[!, :height]);
 
-rc, chn, cnames = stan(stanmodel, heightsdata, ProjDir, diagnostics=false,
-  CmdStanDir=CMDSTAN_HOME);
+(sample_file, log_file) = stan_sample(sm, data=m4_1_data);
 
-describe(chn)
-
-serialize("m4.1s.jls", chn)
-chn2 = deserialize("m4.1s.jls")
-
-describe(chn2)
-
-# end of m4.1s
+if !(sample_file == nothing)
+  chn = read_samples(sm)
+  describe(chn)
+end

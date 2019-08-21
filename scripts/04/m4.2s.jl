@@ -1,28 +1,19 @@
 using StanModels
-gr(size=(500,500));
 
-ProjDir = rel_path_s("..", "scripts", "04")
-cd(ProjDir)
+df = filter(row -> row[:age] >= 18, 
+  CSV.read(joinpath(@__DIR__, "..", "..", "data", "Howell1.csv"), delim=';'))
 
-howell1 = CSV.read(rel_path("..", "data", "Howell1.csv"), delim=';')
-df = convert(DataFrame, howell1);
+max_height = maximum(df[!, :height])
+min_height = minimum(df[!, :height])
 
-df2 = filter(row -> row[:age] >= 18, df)
-#mean_height = mean(df2[:height])
-df2[:height_c] = convert(Vector{Float64}, df2[:height]) # .- mean_height
-first(df2, 5)
-
-max_height_c = maximum(df2[:height_c])
-min_height_c = minimum(df2[:height_c])
-
-heightsmodel = "
+m4_2s = "
 data {
   int N;
   real h[N];
 }
 parameters {
   real<lower=0> sigma;
-  real<lower=$(min_height_c),upper=$(max_height_c)> mu;
+  real<lower=$(min_height),upper=$(max_height)> mu;
 }
 model {
   // Priors for mu and sigma
@@ -34,20 +25,13 @@ model {
 }
 ";
 
-stanmodel = Stanmodel(name="heights", monitors = ["mu", "sigma"],model=heightsmodel,
-  output_format=:mcmcchains);
+sm = SampleModel("m4.2s", m4_2s);
 
-heightsdata = Dict("N" => length(df2[:height]), "h" => df2[:height_c]);
+m4_2_data = Dict("N" => size(df, 1), "h" => df[!, :height]);
 
-rc, chn, cnames = stan(stanmodel, heightsdata, ProjDir, diagnostics=false,
-  CmdStanDir=CMDSTAN_HOME);
+(sample_file, log_file) = stan_sample(sm, data=m4_2_data);
 
-describe(chn)
-
-serialize("m4.2s.jls", chn)
-
-chn2 = deserialize("m4.2s.jls")
-
-describe(chn2)
-
-# end of m4.2s
+if !(sample_file == nothing)
+  chn = read_samples(sm)
+  describe(chn)
+end
